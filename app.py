@@ -13,7 +13,7 @@ from pathlib import Path
 # -----------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data" / "raw"   # <- adjust if your CSVs are elsewhere
+DATA_DIR = BASE_DIR / "data" / "raw"   # adjust if your CSVs are elsewhere
 
 
 def _map_column(df: pd.DataFrame, candidates, new_name):
@@ -143,7 +143,7 @@ st.title("Toronto Water-Quality Analytics Dashboard")
 st.markdown(
     """
 This interactive dashboard explores monthly, spatial, and seasonal patterns  
-in Toronto water-quality monitoring data derived from curated CSV tables.
+in Toronto water-quality monitoring data derived from curated CSV tables.  
 Use the filters on the left to adjust the analysis window and focus.
 """
 )
@@ -157,10 +157,13 @@ st.sidebar.header("Global Filters")
 min_year = int(monthly_stats["Year"].min())
 max_year = int(monthly_stats["Year"].max())
 
+# default to last ~20 years if possible
+default_start = max(min_year, max_year - 20)
+
 year_min, year_max = st.sidebar.select_slider(
     "Year range",
     options=list(range(min_year, max_year + 1)),
-    value=(min_year, max_year),
+    value=(default_start, max_year),
 )
 
 # Month ordering helper
@@ -244,7 +247,7 @@ tab_overview, tab_parameters, tab_locations, tab_seasonal = st.tabs(
 )
 
 # -----------------------------------------------------------------------------
-# TAB 1 – Overview (monthly trends + heatmap)
+# TAB 1 – Overview (monthly trends + heatmap + annual trend)
 # -----------------------------------------------------------------------------
 
 with tab_overview:
@@ -300,8 +303,28 @@ with tab_overview:
                 "Not enough data to construct a month–year heatmap for the selected filters."
             )
 
+        st.markdown("#### Annual average across all months")
+
+        annual_df = (
+            monthly_filtered.groupby("Year", as_index=False)["Mean"].mean()
+        )
+        fig_annual = px.line(
+            annual_df,
+            x="Year",
+            y="Mean",
+            markers=True,
+            labels={
+                "Year": "Year",
+                "Mean": "Average of monthly means",
+            },
+        )
+        fig_annual.update_layout(
+            margin=dict(l=40, r=20, t=40, b=40),
+        )
+        st.plotly_chart(fig_annual, use_container_width=True)
+
 # -----------------------------------------------------------------------------
-# TAB 2 – Parameter trends
+# TAB 2 – Parameter trends (line + summary + boxplot)
 # -----------------------------------------------------------------------------
 
 with tab_parameters:
@@ -327,11 +350,13 @@ with tab_parameters:
         if df_params.empty:
             st.info("Please select at least one parameter with available data.")
         else:
+            # Line chart over time
             fig_top = px.line(
                 df_params,
                 x="Year",
                 y="Mean",
                 color="Characteristic",
+                markers=True,
                 labels={
                     "Year": "Year",
                     "Mean": "Mean measurement value",
@@ -344,21 +369,43 @@ with tab_parameters:
             )
             st.plotly_chart(fig_top, use_container_width=True)
 
-        # Optional: small summary table
-        st.markdown("#### Summary statistics for selected parameters")
-        summary = (
-            df_params.groupby("Characteristic")["Mean"]
-            .agg(["count", "mean", "min", "max"])
-            .rename(
-                columns={
-                    "count": "Observations",
-                    "mean": "Mean of means",
-                    "min": "Min mean",
-                    "max": "Max mean",
-                }
+            # Summary stats table
+            st.markdown("#### Summary statistics for selected parameters")
+            summary = (
+                df_params.groupby("Characteristic")["Mean"]
+                .agg(["count", "mean", "min", "max"])
+                .rename(
+                    columns={
+                        "count": "Observations",
+                        "mean": "Mean of means",
+                        "min": "Min mean",
+                        "max": "Max mean",
+                    }
+                )
             )
-        )
-        st.dataframe(summary, use_container_width=True)
+            st.dataframe(summary, use_container_width=True)
+
+            st.markdown("#### Distribution of mean values by parameter")
+
+            # Boxplot (each characteristic = distribution across years)
+            box_df = top_char_filtered[
+                top_char_filtered["Characteristic"].isin(selected_chars)
+            ].copy()
+
+            fig_box = px.box(
+                box_df,
+                x="Characteristic",
+                y="Mean",
+                points="all",
+                labels={
+                    "Characteristic": "Parameter",
+                    "Mean": "Mean measurement value",
+                },
+            )
+            fig_box.update_layout(
+                margin=dict(l=40, r=20, t=40, b=40),
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # TAB 3 – Location insights
