@@ -1,300 +1,333 @@
-# app.py
-# Toronto Water-Quality Analytics – Streamlit Portfolio App
-
 import pandas as pd
-import streamlit as st
 import plotly.express as px
+import streamlit as st
+from pathlib import Path
 
-# ---- PAGE CONFIG ----
+# -----------------------------------------------------------------------------
+# Paths & data loading
+# -----------------------------------------------------------------------------
+
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+
+
+def _map_column(df: pd.DataFrame, candidates, new_name):
+    """
+    Try to map one of the candidate column names in df to a standard new_name.
+    If none are found, show a clear Streamlit error and return False.
+    """
+    for col in df.columns:
+        if col in candidates:
+            if col != new_name:
+                df.rename(columns={col: new_name}, inplace=True)
+            return True
+
+    st.error(
+        f"Missing expected column for '{new_name}'. "
+        f"Tried names {candidates}, but only found: {list(df.columns)}"
+    )
+    return False
+
+
+@st.cache_data
+def load_csv(name: str) -> pd.DataFrame:
+    path = DATA_DIR / name
+    df = pd.read_csv(path)
+
+    # Strip whitespace from column names (common issue when exporting from tools)
+    df.columns = [c.strip() for c in df.columns]
+    return df
+
+
+# Load all four curated tables
+monthly_stats = load_csv("monthly_overall_stats.csv")
+top_char_stats = load_csv("monthly_top_characteristics_stats.csv")
+location_stats = load_csv("location_summary_stats.csv")
+seasonal_stats = load_csv("seasonal_median_by_month.csv")
+
+# -----------------------------------------------------------------------------
+# Standardise column names so the rest of the code is safe
+# -----------------------------------------------------------------------------
+
+# --- monthly_overall_stats.csv ---
+_ok = True
+_ok &= _map_column(monthly_stats, ["Year", "year"], "Year")
+_ok &= _map_column(
+    monthly_stats, ["Month Name", "Month_Name", "month_name"], "Month_Name"
+)
+_ok &= _map_column(
+    monthly_stats,
+    ["Mean", "mean", "mean_resultvalue", "Mean_ResultValue"],
+    "Mean",
+)
+
+# If anything essential is missing, stop here
+if not _ok:
+    st.stop()
+
+# --- monthly_top_characteristics_stats.csv ---
+_ok_top = True
+_ok_top &= _map_column(top_char_stats, ["Year", "year"], "Year")
+_ok_top &= _map_column(
+    top_char_stats,
+    ["Characteristicname", "characteristicname", "Parameter", "parameter"],
+    "Characteristic",
+)
+_ok_top &= _map_column(
+    top_char_stats,
+    ["Mean", "mean", "mean_resultvalue", "Mean_ResultValue"],
+    "Mean",
+)
+
+if not _ok_top:
+    st.stop()
+
+# --- location_summary_stats.csv ---
+_ok_loc = True
+_ok_loc &= _map_column(
+    location_stats,
+    [
+        "Monitoringlocationname",
+        "monitoringlocationname",
+        "Monitoring Location",
+        "monitoring_location",
+    ],
+    "Location",
+)
+_ok_loc &= _map_column(
+    location_stats,
+    ["Mean", "mean", "mean_resultvalue", "Mean_ResultValue"],
+    "Mean",
+)
+
+if not _ok_loc:
+    st.stop()
+
+# --- seasonal_median_by_month.csv ---
+_ok_season = True
+_ok_season &= _map_column(
+    seasonal_stats, ["Month Name", "Month_Name", "month_name"], "Month_Name"
+)
+_ok_season &= _map_column(
+    seasonal_stats,
+    ["Median", "median", "median_resultvalue", "Median_ResultValue"],
+    "Median",
+)
+
+if not _ok_season:
+    st.stop()
+
+# Make sure Year is integer (for slider and axes)
+if "Year" in monthly_stats.columns:
+    monthly_stats["Year"] = monthly_stats["Year"].astype(int)
+
+if "Year" in top_char_stats.columns:
+    top_char_stats["Year"] = top_char_stats["Year"].astype(int)
+
+# -----------------------------------------------------------------------------
+# Page configuration
+# -----------------------------------------------------------------------------
+
 st.set_page_config(
     page_title="Toronto Water-Quality Analytics",
     layout="wide",
-    page_icon="💧",
 )
 
-# ---- GLOBAL STYLE ----
-st.markdown(
-    """
-    <style>
-    .main { padding-top: 1rem; }
-    .css-18e3th9, .css-1d391kg { padding-top: 1rem; }
-    .metric-label { font-size: 0.9rem !important; }
-    .metric-value { font-size: 1.3rem !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.title("Toronto Water-Quality Analytics Dashboard")
+st.write("Interactive visualizations generated from processed CSV files.")
 
-# ---- LOAD DATA ----
-@st.cache_data
-def load_data():
-    monthly = pd.read_csv("data/monthly_overall_stats.csv")
-    top_chars = pd.read_csv("data/monthly_top_characteristics_stats.csv")
-    locations = pd.read_csv("data/location_summary_stats.csv")
-    seasonal = pd.read_csv("data/seasonal_median_by_month.csv")
+# -----------------------------------------------------------------------------
+# Sidebar filters
+# -----------------------------------------------------------------------------
 
-    # Basic cleaning / typing for this specific project
-    # monthly_overall_stats
-    if "Activity Datetime" in monthly.columns:
-        monthly["Activity Datetime"] = pd.to_datetime(monthly["Activity Datetime"])
-    if "Year" in monthly.columns:
-        monthly["Year"] = monthly["Year"].astype(int)
+st.sidebar.header("Filters")
 
-    # monthly_top_characteristics_stats
-    if "Year" in top_chars.columns:
-        top_chars["Year"] = top_chars["Year"].astype(int)
+min_year = int(monthly_stats["Year"].min())
+max_year = int(monthly_stats["Year"].max())
 
-    # seasonal_median_by_month
-    # Expecting: month (1–12), median_resultvalue, month_name
-    if "month" in seasonal.columns:
-        seasonal["month"] = seasonal["month"].astype(int)
-
-    return monthly, top_chars, locations, seasonal
-
-
-monthly_stats, top_chars_stats, location_stats, seasonal_stats = load_data()
-
-# ---- SIDEBAR FILTERS ----
-st.sidebar.title("Filters")
-
-# Year range slider (based on monthly stats)
-if "Year" in monthly_stats.columns:
-    min_year = int(monthly_stats["Year"].min())
-    max_year = int(monthly_stats["Year"].max())
-else:
-    # fallback if Year not present
-    min_year = int(monthly_stats["Activity Datetime"].dt.year.min())
-    max_year = int(monthly_stats["Activity Datetime"].dt.year.max())
-
-year_range = st.sidebar.slider(
+year_min, year_max = st.sidebar.select_slider(
     "Year range",
-    min_value=min_year,
-    max_value=max_year,
+    options=list(range(min_year, max_year + 1)),
     value=(min_year, max_year),
-    step=1,
 )
 
-# Month filter (uses calendar order)
-month_order = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-]
-available_months = [
-    m for m in month_order
-    if "Month Name" in monthly_stats.columns
-    and m in monthly_stats["Month Name"].unique()
-]
-default_months = available_months  # start with all
+all_months = list(monthly_stats["Month_Name"].unique())
+all_months_sorted = sorted(
+    all_months,
+    key=lambda m: ["January", "February", "March", "April", "May",
+                   "June", "July", "August", "September", "October",
+                   "November", "December"].index(m)
+    if m in [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ]
+    else 99,
+)
 
 selected_months = st.sidebar.multiselect(
     "Months",
-    options=available_months,
-    default=default_months,
-)
-
-# Parameter filter for “Top parameters” view
-if "Characteristicname" in top_chars_stats.columns:
-    all_params = sorted(top_chars_stats["Characteristicname"].unique())
-else:
-    all_params = []
-
-selected_params = st.sidebar.multiselect(
-    "Parameters (for trends chart)",
-    options=all_params,
-    default=all_params[:5] if all_params else [],
+    options=all_months_sorted,
+    default=all_months_sorted,
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Data: Toronto AOC1 water-quality monitoring (processed CSV exports).")
-
-# ---- TITLE & INTRO ----
-st.title("Toronto Water-Quality Analytics Dashboard")
-st.caption("Interactive visualizations generated from processed water-quality summary tables.")
-
-# ---- OVERVIEW METRICS ----
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    n_years = max_year - min_year + 1
-    st.metric("Years of data", f"{n_years}", f"{min_year}–{max_year}")
-
-with col2:
-    if "Monitoringlocationname" in location_stats.columns:
-        n_locations = location_stats["Monitoringlocationname"].nunique()
-    else:
-        n_locations = monthly_stats.get("Monitoringlocationid", pd.Series()).nunique()
-    st.metric("Monitoring locations", n_locations)
-
-with col3:
-    if "Characteristicname" in top_chars_stats.columns:
-        n_params = top_chars_stats["Characteristicname"].nunique()
-    else:
-        n_params = 0
-    st.metric("Water-quality parameters", n_params)
-
-st.markdown("---")
-
-# --------------------------------------------------------------------
-# SECTION 1 – Monthly Mean Trends
-# --------------------------------------------------------------------
-st.subheader("Monthly Mean Water-Quality Trends (1964–2024)")
-
-if "Year" in monthly_stats.columns and "Month Name" in monthly_stats.columns:
-    monthly_filtered = monthly_stats[
-        (monthly_stats["Year"].between(year_range[0], year_range[1]))
-        & (monthly_stats["Month Name"].isin(selected_months))
-    ].copy()
-
-    if not monthly_filtered.empty:
-        fig_monthly = px.line(
-            monthly_filtered,
-            x="Activity Datetime" if "Activity Datetime" in monthly_filtered.columns else "Year",
-            y="Mean",
-            color="Month Name",
-            category_orders={"Month Name": month_order},
-            template="plotly_dark",
-            labels={
-                "Activity Datetime": "Activity Datetime",
-                "Year": "Year",
-                "Mean": "Mean measurement value",
-                "Month Name": "Month",
-            },
-        )
-        fig_monthly.update_layout(
-            height=500,
-            legend_title="Month",
-            margin=dict(l=10, r=10, t=40, b=40),
-        )
-        st.plotly_chart(fig_monthly, use_container_width=True)
-    else:
-        st.info("No data for the selected year range and months.")
-else:
-    st.warning("Monthly summary table is missing expected columns (Year / Month Name).")
-
-st.caption(
-    "Each line shows the monthly mean measurement value across all monitoring locations "
-    "for the selected months and years."
+st.sidebar.write(
+    "Data sources: `monthly_overall_stats.csv`, "
+    "`monthly_top_characteristics_stats.csv`, "
+    "`location_summary_stats.csv`, "
+    "`seasonal_median_by_month.csv`."
 )
 
-st.markdown("---")
+# -----------------------------------------------------------------------------
+# 1. Monthly mean water-quality trends
+# -----------------------------------------------------------------------------
 
-# --------------------------------------------------------------------
-# SECTION 2 – Trends for Top Parameters
-# --------------------------------------------------------------------
-st.subheader("Trends for Top Water-Quality Parameters")
+st.subheader(f"Monthly Water-Quality Trends ({year_min}–{year_max})")
 
-if selected_params and "Characteristicname" in top_chars_stats.columns:
-    chars_filtered = top_chars_stats[
-        (top_chars_stats["Year"].between(year_range[0], year_range[1]))
-        & (top_chars_stats["Characteristicname"].isin(selected_params))
-    ].copy()
+df_monthly = monthly_stats[
+    (monthly_stats["Year"] >= year_min)
+    & (monthly_stats["Year"] <= year_max)
+    & (monthly_stats["Month_Name"].isin(selected_months))
+].copy()
 
-    if not chars_filtered.empty:
-        fig_params = px.line(
-            chars_filtered,
-            x="Year",
-            y="Mean",
-            color="Characteristicname",
-            template="plotly_dark",
-            labels={
-                "Year": "Year",
-                "Mean": "Mean measurement value",
-                "Characteristicname": "Parameter",
-            },
-        )
-        fig_params.update_layout(
-            height=450,
-            legend_title="Parameter",
-            margin=dict(l=10, r=10, t=40, b=10),
-        )
-        st.plotly_chart(fig_params, use_container_width=True)
-    else:
-        st.info("No parameter data for the selected filters.")
+if df_monthly.empty:
+    st.warning("No data for the selected year range and months.")
 else:
-    st.info("No parameters selected or `Characteristicname` column missing.")
-
-st.caption(
-    "Use the sidebar to choose which parameters to display. This view highlights long-term "
-    "changes in key water-quality indicators."
-)
-
-st.markdown("---")
-
-# --------------------------------------------------------------------
-# SECTION 3 – Top Monitoring Locations
-# --------------------------------------------------------------------
-st.subheader("Top Monitoring Locations by Mean Value")
-
-if "Monitoringlocationname" in location_stats.columns and "Mean" in location_stats.columns:
-    # always show same top locations (not filtered by year – this table is already aggregated)
-    top_locs = (
-        location_stats.sort_values("Mean", ascending=False)
-        .head(20)
-        .copy()
-    )
-
-    fig_locs = px.bar(
-        top_locs,
-        x="Mean",
-        y="Monitoringlocationname",
-        orientation="h",
-        template="plotly_dark",
+    fig_monthly = px.line(
+        df_monthly,
+        x="Year",
+        y="Mean",
+        color="Month_Name",
+        title="Monthly Mean Water-Quality Trends",
         labels={
+            "Year": "Year",
             "Mean": "Mean measurement value",
-            "Monitoringlocationname": "Monitoring location",
+            "Month_Name": "Month",
         },
     )
-    fig_locs.update_layout(
-        height=550,
-        margin=dict(l=10, r=10, t=40, b=10),
-        yaxis=dict(autorange="reversed"),
+    fig_monthly.update_layout(
+        legend_title_text="Month",
+        margin=dict(l=40, r=20, t=60, b=40),
     )
-    st.plotly_chart(fig_locs, use_container_width=True)
+    st.plotly_chart(fig_monthly, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# 2. Trends for top parameters
+# -----------------------------------------------------------------------------
+
+st.subheader("Trends for Top Water-Quality Parameters")
+
+df_top = top_char_stats[
+    (top_char_stats["Year"] >= year_min)
+    & (top_char_stats["Year"] <= year_max)
+].copy()
+
+if df_top.empty:
+    st.warning("No parameter data for the selected year range.")
 else:
-    st.warning("Location summary table is missing expected columns.")
+    fig_top = px.line(
+        df_top,
+        x="Year",
+        y="Mean",
+        color="Characteristic",
+        title="Trends for Top Water-Quality Parameters",
+        labels={
+            "Year": "Year",
+            "Mean": "Mean measurement value",
+            "Characteristic": "Parameter",
+        },
+    )
+    fig_top.update_layout(
+        legend_title_text="Parameter",
+        margin=dict(l=40, r=20, t=60, b=40),
+    )
+    st.plotly_chart(fig_top, use_container_width=True)
 
-st.caption(
-    "Locations are ranked by overall mean measurement value across all parameters. "
-    "This can help flag sites with consistently higher concentrations."
-)
+# -----------------------------------------------------------------------------
+# 3. Top monitoring locations by mean value
+# -----------------------------------------------------------------------------
 
-st.markdown("---")
+st.subheader("Top 20 Monitoring Locations by Mean Value")
 
-# --------------------------------------------------------------------
-# SECTION 4 – Seasonal Patterns
-# --------------------------------------------------------------------
+# Sort descending and take top 20
+df_loc = location_stats.sort_values("Mean", ascending=False).head(20)
+
+if df_loc.empty:
+    st.warning("No location summary data available.")
+else:
+    fig_loc = px.bar(
+        df_loc,
+        x="Mean",
+        y="Location",
+        orientation="h",
+        title="Top 20 Monitoring Locations by Mean Value",
+        labels={
+            "Mean": "Mean measurement value",
+            "Location": "Monitoring location",
+        },
+    )
+    fig_loc.update_layout(
+        yaxis=dict(autorange="reversed"),
+        margin=dict(l=200, r=20, t=60, b=40),
+    )
+    st.plotly_chart(fig_loc, use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# 4. Seasonal patterns (median by month)
+# -----------------------------------------------------------------------------
+
 st.subheader("Seasonal Patterns (Median by Month)")
 
-if {"month", "median_resultvalue", "month_name"}.issubset(seasonal_stats.columns):
-    # keep calendar order
-    seasonal_sorted = seasonal_stats.copy()
-    seasonal_sorted["month_name"] = pd.Categorical(
-        seasonal_sorted["month_name"],
+# Order months correctly if we have standard month names
+seasonal_df = seasonal_stats.copy()
+
+month_order = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+if seasonal_df["Month_Name"].dtype == object:
+    seasonal_df["Month_Name"] = pd.Categorical(
+        seasonal_df["Month_Name"],
         categories=month_order,
         ordered=True,
     )
-    seasonal_sorted = seasonal_sorted.sort_values("month_name")
+    seasonal_df = seasonal_df.sort_values("Month_Name")
 
-    fig_seasonal = px.bar(
-        seasonal_sorted,
-        x="month_name",
-        y="median_resultvalue",
-        template="plotly_dark",
+if seasonal_df.empty:
+    st.warning("No seasonal median data available.")
+else:
+    fig_season = px.bar(
+        seasonal_df,
+        x="Month_Name",
+        y="Median",
+        title="Seasonal Median Water-Quality Values by Month",
         labels={
-            "month_name": "Month",
-            "median_resultvalue": "Median measurement value",
+            "Month_Name": "Month",
+            "Median": "Median measurement value",
         },
     )
-    fig_seasonal.update_layout(
-        height=400,
-        margin=dict(l=10, r=10, t=40, b=10),
-        xaxis_title="Month",
+    fig_season.update_layout(
+        margin=dict(l=40, r=20, t=60, b=40),
     )
-    st.plotly_chart(fig_seasonal, use_container_width=True)
-else:
-    st.warning("Seasonal table is missing expected columns (month, median_resultvalue, month_name).")
-
-st.caption(
-    "Median values are more robust to extreme outliers and highlight typical seasonal patterns "
-    "over the full monitoring period."
-)
+    st.plotly_chart(fig_season, use_container_width=True)
