@@ -1,15 +1,11 @@
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import streamlit as st
 from pathlib import Path
 
 # -----------------------------------------------------------------------------
 # Paths & data loading
-#   Assumes:
-#     data/raw/monthly_overall_stats.csv
-#     data/raw/monthly_top_characteristics_stats.csv
-#     data/raw/location_summary_stats.csv
-#     data/raw/seasonal_median_by_month.csv
 # -----------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).parent
@@ -45,7 +41,7 @@ def load_csv(name: str) -> pd.DataFrame:
 
 
 # -----------------------------------------------------------------------------
-# Load all four curated tables
+# Load curated tables
 # -----------------------------------------------------------------------------
 monthly_stats = load_csv("monthly_overall_stats.csv")
 top_char_stats = load_csv("monthly_top_characteristics_stats.csv")
@@ -105,6 +101,14 @@ _ok_loc &= _map_column(
     ["Mean", "mean", "mean_resultvalue", "Mean_ResultValue"],
     "Mean",
 )
+
+# optional count column if it exists under different names
+has_count = False
+for cand in ["count", "n", "N", "NumSamples", "num_samples"]:
+    if cand in location_stats.columns:
+        location_stats.rename(columns={cand: "SampleCount"}, inplace=True)
+        has_count = True
+        break
 
 if not _ok_loc:
     st.stop()
@@ -308,14 +312,32 @@ with tab_overview:
         annual_df = (
             monthly_filtered.groupby("Year", as_index=False)["Mean"].mean()
         )
+
+        show_roll = False
+        if len(annual_df) >= 3:
+            show_roll = st.checkbox(
+                "Show 3-year rolling average", value=True, help="Smoothed trend across years."
+            )
+            if show_roll:
+                annual_df["Rolling_3yr"] = (
+                    annual_df["Mean"]
+                    .rolling(window=3, min_periods=1)
+                    .mean()
+                )
+
+        y_cols = ["Mean"]
+        if show_roll and "Rolling_3yr" in annual_df.columns:
+            y_cols.append("Rolling_3yr")
+
         fig_annual = px.line(
             annual_df,
             x="Year",
-            y="Mean",
+            y=y_cols,
             markers=True,
             labels={
                 "Year": "Year",
-                "Mean": "Average of monthly means",
+                "value": "Average of monthly means",
+                "variable": "Series",
             },
         )
         fig_annual.update_layout(
@@ -323,8 +345,18 @@ with tab_overview:
         )
         st.plotly_chart(fig_annual, use_container_width=True)
 
+        # allow download of the filtered monthly data
+        st.markdown("##### Download data used in this view")
+        csv_bytes = monthly_filtered.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download filtered monthly data (CSV)",
+            data=csv_bytes,
+            file_name=f"monthly_filtered_{year_min}_{year_max}.csv",
+            mime="text/csv",
+        )
+
 # -----------------------------------------------------------------------------
-# TAB 2 – Parameter trends (line + summary + boxplot)
+# TAB 2 – Parameter trends (line + summary + trends + boxplot)
 # -----------------------------------------------------------------------------
 
 with tab_parameters:
@@ -343,33 +375,75 @@ with tab_parameters:
             default=default_chars,
         )
 
-        df_params = top_char_filtered[
-            top_char_filtered["Characteristic"].isin(selected_chars)
-        ].copy()
-
-        if df_params.empty:
-            st.info("Please select at least one parameter with available data.")
+        if not selected_chars:
+            st.info("Please select at least one parameter.")
         else:
-            # Line chart over time
-            fig_top = px.line(
-                df_params,
-                x="Year",
-                y="Mean",
-                color="Characteristic",
-                markers=True,
-                labels={
-                    "Year": "Year",
-                    "Mean": "Mean measurement value",
-                    "Characteristic": "Parameter",
-                },
+            df_params = top_char_filtered[
+                top_char_filtered["Characteristic"].isin(selected_chars)
+            ].copy()
+
+            view_mode = st.radio(
+                "Value scaling",
+                ["Raw means", "Indexed (first year = 100)"],
+                horizontal=True,
             )
+
+            small_multiples = st.checkbox(
+                "Show one panel per parameter (small multiples)", value=False
+            )
+
+            # Prepare data for plotting
+            df_plot = df_params.copy().sort_values(["Characteristic", "Year"])
+
+            if view_mode == "Indexed (first year = 100)":
+                df_plot["Value"] = df_plot.groupby("Characteristic")["Mean"].transform(
+                    lambda s: (s / s.iloc[0]) * 100 if s.iloc[0] != 0 else np.nan
+                )
+                y_col = "Value"
+                y_label = "Indexed mean (first year = 100)"
+            else:
+                df_plot["Value"] = df_plot["Mean"]
+                y_col = "Value"
+                y_label = "Mean measurement value"
+
+            # Line chart over time
+            if small_multiples:
+                fig_top = px.line(
+                    df_plot,
+                    x="Year",
+                    y=y_col,
+                    color="Characteristic",
+                    facet_col="Characteristic",
+                    facet_col_wrap=2,
+                    markers=True,
+                    labels={
+                        "Year": "Year",
+                        y_col: y_label,
+                        "Characteristic": "Parameter",
+                    },
+                )
+                fig_top.update_layout(showlegend=False)
+            else:
+                fig_top = px.line(
+                    df_plot,
+                    x="Year",
+                    y=y_col,
+                    color="Characteristic",
+                    markers=True,
+                    labels={
+                        "Year": "Year",
+                        y_col: y_label,
+                        "Characteristic": "Parameter",
+                    },
+                )
+
             fig_top.update_layout(
                 legend_title_text="Parameter",
                 margin=dict(l=40, r=20, t=40, b=40),
             )
             st.plotly_chart(fig_top, use_container_width=True)
 
-            # Summary stats table
+            # Summary stats table (raw means)
             st.markdown("#### Summary statistics for selected parameters")
             summary = (
                 df_params.groupby("Characteristic")["Mean"]
@@ -383,14 +457,48 @@ with tab_parameters:
                     }
                 )
             )
-            st.dataframe(summary, use_container_width=True)
+
+            # Trend metrics (simple linear regression + % change)
+            trends = []
+            for char, grp in df_params.groupby("Characteristic"):
+                grp_sorted = grp.sort_values("Year")
+                if grp_sorted["Year"].nunique() > 1:
+                    x = grp_sorted["Year"].values
+                    y = grp_sorted["Mean"].values
+                    slope, intercept = np.polyfit(x, y, 1)
+                    first_val = y[0]
+                    last_val = y[-1]
+                    pct_change = (
+                        (last_val - first_val) / first_val * 100
+                        if first_val != 0
+                        else np.nan
+                    )
+                else:
+                    slope = np.nan
+                    pct_change = np.nan
+
+                trends.append(
+                    {
+                        "Characteristic": char,
+                        "Trend slope per year": slope,
+                        "% change (first→last year)": pct_change,
+                        "Years of data": grp_sorted["Year"].nunique(),
+                    }
+                )
+
+            trend_df = pd.DataFrame(trends).set_index("Characteristic")
+            trend_df = trend_df.round(2)
+
+            col_summary, col_trend = st.columns(2)
+            with col_summary:
+                st.dataframe(summary, use_container_width=True)
+            with col_trend:
+                st.dataframe(trend_df, use_container_width=True)
 
             st.markdown("#### Distribution of mean values by parameter")
 
             # Boxplot (each characteristic = distribution across years)
-            box_df = top_char_filtered[
-                top_char_filtered["Characteristic"].isin(selected_chars)
-            ].copy()
+            box_df = df_params.copy()
 
             fig_box = px.box(
                 box_df,
@@ -406,6 +514,16 @@ with tab_parameters:
                 margin=dict(l=40, r=20, t=40, b=40),
             )
             st.plotly_chart(fig_box, use_container_width=True)
+
+            # download button for parameter-level data
+            st.markdown("##### Download parameter-level data (filtered)")
+            param_csv = df_params.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Download parameter data (CSV)",
+                data=param_csv,
+                file_name=f"parameter_trends_{year_min}_{year_max}.csv",
+                mime="text/csv",
+            )
 
 # -----------------------------------------------------------------------------
 # TAB 3 – Location insights
@@ -427,30 +545,53 @@ with tab_locations:
             step=1,
         )
 
+        sort_option = st.radio(
+            "Sort locations by",
+            ["Highest mean", "Lowest mean"],
+            horizontal=True,
+        )
+
+        ascending = sort_option == "Lowest mean"
+
         df_loc = (
-            location_stats.sort_values("Mean", ascending=False)
+            location_stats.sort_values("Mean", ascending=ascending)
             .head(top_n)
             .copy()
         )
 
+        # Colour by mean value for more analytical feel
         fig_loc = px.bar(
             df_loc,
             x="Mean",
             y="Location",
             orientation="h",
+            color="Mean",
+            color_continuous_scale="Blues",
             labels={
                 "Mean": "Mean measurement value",
                 "Location": "Monitoring location",
             },
+            hover_data=["Mean"]
+            + (["SampleCount"] if has_count and "SampleCount" in df_loc.columns else []),
         )
         fig_loc.update_layout(
             yaxis=dict(autorange="reversed"),
             margin=dict(l=200, r=20, t=40, b=40),
+            coloraxis_colorbar_title="Mean",
         )
         st.plotly_chart(fig_loc, use_container_width=True)
 
         st.markdown("#### Location detail")
         st.dataframe(df_loc, use_container_width=True)
+
+        # download button
+        loc_csv = df_loc.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download displayed locations (CSV)",
+            data=loc_csv,
+            file_name="location_summary_topN.csv",
+            mime="text/csv",
+        )
 
 # -----------------------------------------------------------------------------
 # TAB 4 – Seasonality
@@ -481,15 +622,34 @@ with tab_seasonal:
                 "No seasonal data for the selected months. Try including more months."
             )
         else:
-            fig_season = px.bar(
-                seasonal_df,
-                x="Month_Name",
-                y="Median",
-                labels={
-                    "Month_Name": "Month",
-                    "Median": "Median measurement value",
-                },
+            chart_type = st.radio(
+                "Chart view",
+                ["Bar (median per month)", "Line (median per month)"],
+                horizontal=True,
             )
+
+            if chart_type.startswith("Bar"):
+                fig_season = px.bar(
+                    seasonal_df,
+                    x="Month_Name",
+                    y="Median",
+                    labels={
+                        "Month_Name": "Month",
+                        "Median": "Median measurement value",
+                    },
+                )
+            else:
+                fig_season = px.line(
+                    seasonal_df,
+                    x="Month_Name",
+                    y="Median",
+                    markers=True,
+                    labels={
+                        "Month_Name": "Month",
+                        "Median": "Median measurement value",
+                    },
+                )
+
             fig_season.update_layout(
                 margin=dict(l=40, r=20, t=40, b=40),
             )
@@ -497,3 +657,11 @@ with tab_seasonal:
 
             st.markdown("#### Seasonal median values (table)")
             st.dataframe(seasonal_df, use_container_width=True)
+
+            seas_csv = seasonal_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Download seasonal medians (CSV)",
+                data=seas_csv,
+                file_name="seasonal_median_by_month_filtered.csv",
+                mime="text/csv",
+            )
