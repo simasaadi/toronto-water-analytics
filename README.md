@@ -1,87 +1,104 @@
-
 Toronto Water-Quality Analytics
 
-Long-term trends, seasonal patterns, and parameter-specific insights (1964–2024)
+Long-term trends, seasonal patterns, anomaly detection, and geospatial insights (1964–2024)
 Live dashboard: https://toronto-water-analytics-3rtrpjffc6gfsfwax4rxf2.streamlit.app/
 
-Executive Summary
+Overview
 
-This project presents a real-world applied analytics case study examining long-term water-quality trends across Toronto’s AOC1 (Area of Concern) using open data from the Great Lakes DataStream platform.
-The purpose is to demonstrate a full analytics workflow—from raw data ingestion and cleaning to SQL analytics and interactive dashboarding—while generating insights relevant to environmental managers, policy teams, and technical audiences.
+This project is a full applied analytics case study examining long-term water-quality trends across Toronto’s AOC1 (Area of Concern) using open data from the Great Lakes DataStream platform.
 
-The analysis reveals key temporal and seasonal behavior across parameters such as chloride, dissolved oxygen, Kjeldahl nitrogen, specific conductance, and water temperature, helping illustrate how water quality has evolved over six decades.
+It demonstrates an end-to-end analytics workflow:
 
-This project is built for portfolio demonstration and highlights capabilities in data engineering, exploratory analysis, time-series analytics, SQL, and interactive visualization.
+Raw data ingestion
+
+Cleaning and standardization
+
+SQL-based aggregation
+
+Exploratory data analysis
+
+Advanced time-series methods
+
+Geospatial visualization
+
+Interactive dashboarding
+
+Communication of insights for policy and environmental management
+
+The goal is to produce a portfolio-grade project that reflects real analytical work relevant to:
+
+Environmental monitoring
+
+Water-resource management
+
+Technical analytics roles
+
+Public-sector decision support
+
+The analysis covers over six decades of measurements across multiple parameters and monitoring locations.
 
 Data Source
 
 Platform: Great Lakes DataStream
+Region: Toronto AOC1 monitoring network
+Years: ∼1964–2024
+Observations: Thousands of sample records
+Variables:
 
-Region: Toronto AOC1 monitoring locations
+Sampling date and time
 
-Years covered: ~1964–2024
-
-Observations: Thousands of sample records across parameters, locations, and dates
-
-Variables include:
-
-Activity date & time
-
-Monitoring location
+Monitoring location (ID + lat/lon)
 
 Parameter name
 
-Result values (mean, min, max, medians)
+Result values (mean, median, min, max)
 
 Units
 
-Metadata fields (method, detection limits, etc.)
+Metadata (method, detection limits, etc.)
 
 Project Objectives
 
-Identify long-term water-quality trends across six decades of monitoring.
+Analyze long-term water-quality trends across multiple parameters.
 
-Analyze seasonal patterns (monthly/annual variation).
+Characterize seasonal dynamics and environmental cycles.
 
-Compare parameter-specific behaviors, such as chloride, DO, nitrogen, and conductance.
+Compare parameter-specific behaviour (chloride, DO, nitrogen, conductance, temperature).
 
-Demonstrate SQL-based analytical queries for environmental datasets.
+Apply SQL queries to environmental datasets.
 
-Build an interactive Streamlit dashboard to communicate findings clearly.
+Build geospatial and temporal visualizations.
 
-Pipeline & Methods
+Communicate insights via a Streamlit dashboard.
 
-This repository follows a clear analytics workflow:
+Produce a deep-dive analytical notebook suitable for technical review.
 
+Analytics Pipeline
 1. Data Ingestion & Cleaning
 
 Notebooks:
 
-01_data_cleaning.ipynb – standardization, missing values, formatting
+01_data_cleaning.ipynb
 
-02_exploration.ipynb – initial EDA, distributions, summary statistics
+02_exploration.ipynb
 
-Cleaning steps included:
+Key steps:
 
-Parsing dates
+Parsing and standardizing dates
+
+Merging date + time into activity_datetime
+
+Enforcing numeric types for result values
 
 Normalizing parameter names
 
-Removing invalid or duplicate records
+Removing invalid/duplicate entries
 
-Creating month/year fields
+Deriving year, month, month_name
 
-Aggregating per-parameter time series
+Structuring data for time-series analysis
 
-2. Analysis & Feature Engineering
-
-Notebooks:
-
-03_analysis.ipynb – long-term trend analysis
-
-04_export_for_tableau.ipynb – output of curated CSV tables
-
-Created curated tables:
+Curated tables produced include:
 
 monthly_overall_stats.csv
 
@@ -91,107 +108,146 @@ location_summary_stats.csv
 
 seasonal_median_by_month.csv
 
-These were used by the dashboard and for SQL analysis.
-
-3. SQL Analytics
+2. SQL Analytics
 
 Folder: sql/
 
 quality_trends.sql
 
-Contains foundational time-series aggregations:
+Foundational time-series queries:
 
 Mean by year
 
 Mean by month
 
-Parameter-level grouping
+Parameter-level summaries
 
-Sorting by long-term trends
+Sorting for upward/downward long-term trends
 
-water_usage_queries.sql (Advanced SQL)
-
-Includes more complex queries such as:
+water_usage_queries.sql (Advanced)
 
 5-year rolling averages
 
-Anomaly detection (values beyond statistical thresholds)
+Seasonal comparisons (window functions)
 
-Seasonal comparisons using window functions
+Outlier detection (z-score thresholding)
 
-Identifying years with highest/lowest concentrations
+Ranking years with highest/lowest concentrations
 
-Parameter-specific exceedance checks
+Exceedance identification for selected parameters
 
-4. Interactive Dashboard (Streamlit)
+3. Interactive Dashboard (Streamlit)
 
-Live: https://toronto-water-analytics-3rtrpjffc6gfsfwax4rxf2.streamlit.app/
+Live App:
+https://toronto-water-analytics-3rtrpjffc6gfsfwax4rxf2.streamlit.app/
 
-App file: app.py
+File: app.py
 
-The dashboard includes four analytical tabs:
+Dashboard features:
 
 Overview
 
-KPI indicators: date range, number of months, number of parameters, monitoring sites
+KPI metrics
 
-Clean high-level narrative for non-technical users
+Summary statistics
+
+High-level narrative
 
 Parameter Trends
 
-Time-series comparison across selected parameters.
-Parameters available:
-
-Chloride
-
-Dissolved oxygen (DO)
-
-Kjeldahl nitrogen
-
-Specific conductance
-
-Temperature (water)
+Multi-parameter time-series visualization
 
 Location Insights
 
-Top monitoring locations by mean values
-
-Useful for identifying consistently elevated sites
+Ranking monitoring sites by mean value
 
 Seasonality
 
-Median monthly patterns
+Median monthly cycles by parameter
 
-Illustrates expected environmental cycles
+4. In-Depth Analysis Notebook (NEW)
+
+Notebook: 05_in_depth_water_quality_analysis.ipynb
+
+This notebook extends the project beyond the dashboard, adding advanced statistical, temporal, and spatial analytics.
+
+Included Analyses
+A. Correlation Analysis
+
+Daily mean pivot
+
+Parameter correlation heatmap
+
+B. Seasonal Boxplots
+
+Month-by-month distribution
+
+Variability, medians, outliers
+
+C. Anomaly Detection
+
+Monthly aggregation
+
+Rolling 12-month z-scores
+
+Automatic anomaly flagging (|z| ≥ 3)
+
+D. Seasonal Decomposition
+
+statsmodels additive decomposition
+
+Trend / seasonality / residual separation
+
+E. Linear Trend Modeling
+
+OLS regression on yearly means
+
+Slope (per year & per decade)
+
+R² and model interpretation
+
+F. Spatial Analytics (Folium Maps)
+
+Station map (marker size = sample count)
+
+Color-scaled station map (mean concentration)
+
+Heatmap of intensity / high-value clusters
+
+These provide spatial patterns that complement the time-series analysis.
 
 Key Insights
 1. Seasonal Patterns
 
-Specific conductance and chloride exhibit winter peaks (likely road salt influence).
+Specific conductance & chloride peak in winter
 
-Water temperature follows expected seasonal cycles.
+Water temperature peaks in summer
 
-Dissolved oxygen (DO) shows inverse behavior with temperature (higher in cold months).
+DO inversely tracks temperature
+
+Nitrogen parameters show broader seasonal variability
 
 2. Long-Term Trends
 
-(As observed visually and from SQL summaries)
+Some parameters show gradual increases
 
-Specific conductance shows periods of elevated values in later decades.
+Others stabilize or decline, possibly reflecting urban or regulatory changes
 
-Some parameters display stabilization or decline over time, indicating potential improvements or regulatory changes.
+3. Parameter Behavior
 
-3. Parameter-Specific Behavior
+Chloride: high variability + winter spikes
 
-Chloride: noticeable variability and winter spikes.
+DO: stable but strongly seasonal
 
-Dissolved oxygen: relatively stable with seasonal oscillation.
+Conductance: clear seasonality and long-term dynamics
 
-Kjeldahl nitrogen: fluctuates with broader seasonal and annual variation.
+4. Spatial Insights
 
-Specific conductance: strong seasonal and long-term patterns.
+Certain monitoring sites consistently show higher means
 
-These insights have real relevance for environmental monitoring and water policy teams.
+Spatial gradients visible in color-scale maps
+
+Heatmaps highlight clusters of elevated measurements
 
 Repository Structure
 toronto-water-analytics/
@@ -206,6 +262,7 @@ toronto-water-analytics/
 │   ├── 02_exploration.ipynb
 │   ├── 03_analysis.ipynb
 │   ├── 04_export_for_tableau.ipynb
+│   ├── 05_in_depth_water_quality_analysis.ipynb   ← NEW
 │
 ├── sql/
 │   ├── quality_trends.sql
@@ -216,38 +273,34 @@ toronto-water-analytics/
 └── README.md
 
 How to Run Locally
-1. Clone the repository
 git clone https://github.com/simasaadi/toronto-water-analytics.git
 cd toronto-water-analytics
 
-2. Create a virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-3. Install dependencies
 pip install -r requirements.txt
 
-4. Run the Streamlit app
 streamlit run app.py
 
-5. Run SQL scripts
 
-Any SQLite/MySQL/PostgreSQL client will work.
-Example using SQLite:
+SQL:
 
 sqlite3 water_quality.db < sql/quality_trends.sql
 
 Future Enhancements
 
-Incorporate geospatial mapping (hotspots, clusters).
+Add multi-parameter spatial clustering
 
-Automated ETL pipeline to refresh data monthly.
+Automated monthly data-refresh pipeline
 
-Parameter exceedance comparison against regulatory water-quality thresholds.
+Comparison against regulatory threshold values
 
-Expand dashboard with time-series forecasting capabilities.
+Forecasting (Prophet / ARIMA)
+
+Integration with geospatial boundaries (subwatersheds, land use areas)
 
 Author
 
 Sima Saadi
-Toronto-based environmental researcher & data analyst.
+Toronto-based environmental researcher & data analyst
