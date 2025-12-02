@@ -10,7 +10,8 @@ from pathlib import Path
 # Paths and cached data loading
 # -------------------------------------------------
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data" / "raw"
+DATA_DIR = BASE_DIR / "data"   # CSVs live directly in /data
+
 
 @st.cache_data
 def load_csv(filename: str) -> pd.DataFrame:
