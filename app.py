@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,13 +9,6 @@ from pathlib import Path
 # -------------------------------------------------
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"   # CSVs live directly in /data
-
-
-@st.cache_data
-def load_csv(filename: str) -> pd.DataFrame:
-    path = DATA_DIR / filename
-    return pd.read_csv(path)
-
 
 def _map_column(df: pd.DataFrame, candidates, new_name):
     """
@@ -36,27 +27,31 @@ def _map_column(df: pd.DataFrame, candidates, new_name):
     )
     return False
 
-
 @st.cache_data
 def load_csv(name: str) -> pd.DataFrame:
     path = DATA_DIR / name
     df = pd.read_csv(path)
-
-    # Strip whitespace from column names (common issue when exporting from tools)
+    # Strip whitespace from column names (common issue)
     df.columns = [c.strip() for c in df.columns]
     return df
+
 
 
 # -----------------------------------------------------------------------------
 # Load curated tables
 # -----------------------------------------------------------------------------
 
+
 monthly_overall = load_csv("monthly_overall_stats.csv")
 monthly_top = load_csv("monthly_top_characteristics_stats.csv")
 location_summary = load_csv("location_summary_stats.csv")
 seasonal_median = load_csv("seasonal_median_by_month.csv")
 
-monthly_stats = monthly_overall.copy()
+# Aliases used in the column-mapping section
+monthly_stats   = monthly_overall.copy()
+top_char_stats  = monthly_top.copy()
+location_stats  = location_summary.copy()
+seasonal_stats  = seasonal_median.copy()
 
 
 # -----------------------------------------------------------------------------
