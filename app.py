@@ -1,15 +1,21 @@
-import pandas as pd
-import numpy as np
-import plotly.express as px
+
+
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from pathlib import Path
 
-# -----------------------------------------------------------------------------
-# Paths & data loading
-# -----------------------------------------------------------------------------
-
+# -------------------------------------------------
+# Paths and cached data loading
+# -------------------------------------------------
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data" / "raw"   # adjust if your CSVs are elsewhere
+DATA_DIR = BASE_DIR / "data" / "raw"
+
+@st.cache_data
+def load_csv(filename: str) -> pd.DataFrame:
+    path = DATA_DIR / filename
+    return pd.read_csv(path)
 
 
 def _map_column(df: pd.DataFrame, candidates, new_name):
@@ -43,10 +49,13 @@ def load_csv(name: str) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 # Load curated tables
 # -----------------------------------------------------------------------------
-monthly_stats = load_csv("monthly_overall_stats.csv")
-top_char_stats = load_csv("monthly_top_characteristics_stats.csv")
-location_stats = load_csv("location_summary_stats.csv")
-seasonal_stats = load_csv("seasonal_median_by_month.csv")
+
+monthly_overall = load_csv("monthly_overall_stats.csv")
+monthly_top = load_csv("monthly_top_characteristics_stats.csv")
+location_summary = load_csv("location_summary_stats.csv")
+seasonal_median = load_csv("seasonal_median_by_month.csv")
+
+
 
 # -----------------------------------------------------------------------------
 # Standardise column names so the rest of the code is safe
