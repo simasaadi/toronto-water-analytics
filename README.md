@@ -1,7 +1,10 @@
 Toronto Water-Quality Analytics
 
 Long-term trends, seasonal patterns, anomaly detection, and geospatial insights (1964–2024)
-Live dashboard: https://toronto-water-analytics-3rtrpjffc6gfsfwax4rxf2.streamlit.app/
+
+## 🚀 Live Dashboard
+
+[![Streamlit App](https://img.shields.io/badge/Streamlit-Live%20App-red?logo=streamlit)](https://toronto-water-analytics-3trpjjfc6gfsfwax4rxf2.streamlit.app/)
 
 Overview
 
