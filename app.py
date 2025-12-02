@@ -56,6 +56,7 @@ monthly_top = load_csv("monthly_top_characteristics_stats.csv")
 location_summary = load_csv("location_summary_stats.csv")
 seasonal_median = load_csv("seasonal_median_by_month.csv")
 
+monthly_stats = monthly_overall.copy()
 
 
 # -----------------------------------------------------------------------------
