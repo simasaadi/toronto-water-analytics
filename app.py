@@ -154,11 +154,22 @@ st.set_page_config(
 st.title("Toronto Water-Quality Analytics Dashboard")
 st.markdown(
     """
-This interactive dashboard explores monthly, spatial, and seasonal patterns  
-in Toronto water-quality monitoring data derived from curated CSV tables.  
-Use the filters on the left to adjust the analysis window and focus.
-"""
+This dashboard analyzes two decades of water-quality monitoring data (2004–2024) from Toronto’s Area of Concern (AOC1).  
+It brings together monthly, spatial, and seasonal perspectives to help identify long-term trends, potential anomalies,  
+and differences across hundreds of monitoring stations.
+
+### What this dashboard helps you explore
+- How monthly water-quality values have changed across the network over time  
+- Whether long-term trends show improvement or decline  
+- Seasonal patterns across parameters (e.g., nutrients, physical indicators)  
+- Differences between monitoring locations and regional behavior  
+- Years or months with unusual spikes that may indicate environmental events or data quality issues
+
+**All metrics shown are monthly means aggregated from raw monitoring observations, standardized to support  
+cross-site comparison.**
+    """
 )
+
 
 # -----------------------------------------------------------------------------
 # Sidebar – global filters
